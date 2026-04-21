@@ -1,0 +1,1121 @@
+openapi: 3.0.0
+info:
+  title: Grocery Catalog API
+  version: 1.0.0
+  description: >
+    Backend API for a grocery store platform. Administrators can manage product
+    listings; authenticated users can browse products, manage a cart, and place orders.
+
+    **Authentication:** Use `POST /api/auth/login` to obtain a JWT token, then click
+    **Authorize** (🔒) and enter `<your-token>` to attach it to protected requests.
+servers:
+  - url: /api
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Enter the JWT token returned by `POST /api/auth/login`.
+        Swagger UI will prefix it with "Bearer " automatically.
+
+  schemas:
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Jane Doe
+        email:
+          type: string
+          example: jane@example.com
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    ProductStorefront:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        product_name:
+          type: string
+          example: Blueberries
+        upc:
+          type: string
+          example: "4049"
+        price:
+          type: number
+          format: decimal
+          example: 4.29
+
+    ProductAdmin:
+      allOf:
+        - $ref: '#/components/schemas/ProductStorefront'
+        - type: object
+          properties:
+            stock_quantity:
+              type: integer
+              example: 50
+            reorder_threshold:
+              type: integer
+              example: 10
+            warehouse_location:
+              type: string
+              example: A-12
+
+    CartItem:
+      type: object
+      properties:
+        product_id:
+          type: integer
+          example: 1
+        product_name:
+          type: string
+          example: Blueberries
+        quantity:
+          type: integer
+          example: 2
+        unit_price:
+          type: number
+          example: 4.29
+        subtotal:
+          type: number
+          example: 8.58
+
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        user_id:
+          type: integer
+          example: 3
+        updated_at:
+          type: string
+          format: date-time
+          example: "2025-01-16T08:45:00Z"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        total:
+          type: number
+          example: 8.58
+
+    OrderItem:
+      type: object
+      properties:
+        product_id:
+          type: integer
+          example: 1
+        product_name:
+          type: string
+          example: Blueberries
+        quantity:
+          type: integer
+          example: 2
+        unit_price:
+          type: number
+          example: 4.29
+
+    OrderSummary:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          example: 3
+        status:
+          type: string
+          enum: [pending, processing, shipped, delivered]
+          example: pending
+        total:
+          type: number
+          example: 12.78
+        created_at:
+          type: string
+          format: date-time
+          example: "2025-01-15T10:30:00Z"
+
+    OrderDetail:
+      allOf:
+        - $ref: '#/components/schemas/OrderSummary'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: '#/components/schemas/OrderItem'
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: Not authenticated. Please provide a valid token.
+
+paths:
+
+  # ─── Auth ──────────────────────────────────────────────────────────────────
+
+  /auth/signup:
+    post:
+      tags: [Auth]
+      summary: Register a new user
+      description: >
+        Creates a new user account with a hashed password and automatically
+        creates a cart for that user in the same transaction.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: Jane Doe
+                email:
+                  type: string
+                  format: email
+                  example: jane@example.com
+                password:
+                  type: string
+                  minLength: 8
+                  maxLength: 64
+                  example: secretpass1
+            example:
+              name: Jane Doe
+              email: jane@example.com
+              password: secretpass1
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              example:
+                id: 1
+                name: Jane Doe
+                email: jane@example.com
+                created_at: "2025-01-15T10:30:00Z"
+        '400':
+          description: Missing or invalid fields (e.g. malformed email, missing name or password)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+              example:
+                errors: ["Email is not valid", "Password must contain at least 8 characters"]
+        '409':
+          description: An account with that email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Email has already been used
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Authenticate a user
+      description: >
+        Validates credentials and returns a signed JWT to be used as a Bearer
+        token on all subsequent authenticated requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  example: jane@example.com
+                password:
+                  type: string
+                  example: secretpass1
+            example:
+              email: jane@example.com
+              password: secretpass1
+      responses:
+        '200':
+          description: Authentication successful — returns a JWT
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+              example:
+                token: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        '400':
+          description: Missing email or password field
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  errors:
+                    type: array
+                    items:
+                      type: string
+              example:
+                errors: ["Email is required", "Password is required"]
+        '401':
+          description: Email not found or password does not match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Invalid credentials
+
+  # ─── Products ──────────────────────────────────────────────────────────────
+
+  /products:
+    get:
+      tags: [Products]
+      summary: List all products
+      description: >
+        Returns all products. Unauthenticated and standard users receive
+        storefront fields only (`id`, `product_name`, `upc`, `price`).
+        Admins additionally receive `stock_quantity`, `reorder_threshold`,
+        and `warehouse_location`.
+      security:
+        - {}
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Array of products
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductStorefront'
+              examples:
+                storefront:
+                  summary: Response for unauthenticated / standard user
+                  value:
+                    - id: 1
+                      product_name: Blueberries
+                      upc: "4049"
+                      price: 4.29
+                    - id: 2
+                      product_name: Strawberries
+                      upc: "3085"
+                      price: 3.49
+                admin:
+                  summary: Response for admin (includes inventory fields)
+                  value:
+                    - id: 1
+                      product_name: Blueberries
+                      upc: "4049"
+                      price: 4.29
+                      stock_quantity: 35
+                      reorder_threshold: 5
+                      warehouse_location: A-12
+
+    post:
+      tags: [Products]
+      summary: Create a product
+      description: Creates a new product in the catalog. Admin access required.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_name, upc, price, stock_quantity]
+              properties:
+                product_name:
+                  type: string
+                  example: Strawberries
+                upc:
+                  type: string
+                  example: "3085"
+                price:
+                  type: number
+                  example: 3.49
+                stock_quantity:
+                  type: integer
+                  example: 50
+                reorder_threshold:
+                  type: integer
+                  example: 10
+                warehouse_location:
+                  type: string
+                  example: B-07
+            example:
+              product_name: Strawberries
+              upc: "3085"
+              price: 3.49
+              stock_quantity: 50
+              reorder_threshold: 10
+              warehouse_location: B-07
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAdmin'
+              example:
+                id: 5
+                product_name: Strawberries
+                upc: "3085"
+                price: 3.49
+                stock_quantity: 50
+                reorder_threshold: 10
+                warehouse_location: B-07
+        '400':
+          description: Missing required fields or invalid data types
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "product_name, upc, price, and stock_quantity are required"
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+        '409':
+          description: A product with that UPC already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: A product with that UPC already exists
+
+  /products/{id}:
+    get:
+      tags: [Products]
+      summary: Get a product by ID
+      description: >
+        Returns a single product. Admins receive all fields;
+        other callers receive storefront fields only.
+      security:
+        - {}
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        '200':
+          description: Product found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductStorefront'
+              example:
+                id: 1
+                product_name: Blueberries
+                upc: "4049"
+                price: 4.29
+        '400':
+          description: ID is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: ID must be a positive integer
+        '404':
+          description: No product with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product 99 not found
+
+    patch:
+      tags: [Products]
+      summary: Partially update a product
+      description: >
+        Updates any subset of a product's fields. Admin access required.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_name:
+                  type: string
+                  example: Blueberries (Organic)
+                upc:
+                  type: string
+                  example: "4049"
+                price:
+                  type: number
+                  example: 4.99
+                stock_quantity:
+                  type: integer
+                  example: 35
+                reorder_threshold:
+                  type: integer
+                  example: 5
+                warehouse_location:
+                  type: string
+                  example: A-12
+            example:
+              price: 4.99
+              stock_quantity: 35
+      responses:
+        '200':
+          description: Product updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductAdmin'
+              example:
+                id: 1
+                product_name: Blueberries
+                upc: "4049"
+                price: 4.99
+                stock_quantity: 35
+                reorder_threshold: 5
+                warehouse_location: A-12
+        '400':
+          description: ID is not a positive integer, or no valid fields provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: ID must be a positive integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+        '404':
+          description: No product with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product 99 not found
+        '409':
+          description: A product with that UPC already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: A product with that UPC already exists
+
+    delete:
+      tags: [Products]
+      summary: Delete a product
+      description: >
+        Permanently removes a product and cascades to remove it from any cart
+        items and order line items. Admin access required.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        '204':
+          description: Product deleted — no content returned
+        '400':
+          description: ID is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: ID must be a positive integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+        '404':
+          description: No product with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product 99 not found
+
+  # ─── Cart ──────────────────────────────────────────────────────────────────
+
+  /cart:
+    get:
+      tags: [Cart]
+      summary: Get current user's cart
+      description: Returns the authenticated user's cart and all items in it.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Cart retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 2
+                user_id: 3
+                updated_at: "2025-01-16T08:45:00Z"
+                items:
+                  - product_id: 1
+                    product_name: Blueberries
+                    quantity: 2
+                    unit_price: 4.29
+                    subtotal: 8.58
+                total: 8.58
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+
+    delete:
+      tags: [Cart]
+      summary: Clear all items from the cart
+      description: >
+        Removes all items from the cart. The cart record itself is preserved.
+        This is also called internally when a user places an order.
+      security:
+        - bearerAuth: []
+      responses:
+        '204':
+          description: Cart cleared — no content returned
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+
+  /cart/items:
+    post:
+      tags: [Cart]
+      summary: Add a product to the cart
+      description: >
+        Adds the given product and quantity to the cart. If the product is
+        already in the cart, its quantity is incremented instead of creating
+        a duplicate entry.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product_id, quantity]
+              properties:
+                product_id:
+                  type: integer
+                  minimum: 1
+                  example: 1
+                quantity:
+                  type: integer
+                  minimum: 1
+                  example: 2
+            example:
+              product_id: 1
+              quantity: 2
+      responses:
+        '201':
+          description: Item added — returns the updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 2
+                user_id: 3
+                updated_at: "2025-01-16T08:45:00Z"
+                items:
+                  - product_id: 1
+                    product_name: Blueberries
+                    quantity: 2
+                    unit_price: 4.29
+                    subtotal: 8.58
+                total: 8.58
+        '400':
+          description: Missing product_id or quantity, or quantity is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: quantity must be a positive integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '404':
+          description: Referenced product_id does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product 99 not found
+
+  /cart/items/{product_id}:
+    patch:
+      tags: [Cart]
+      summary: Update a cart item's quantity
+      description: >
+        Sets the quantity of the specified product in the cart.
+        Setting `quantity` to `0` removes the item from the cart entirely.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: product_id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [quantity]
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 0
+                  example: 4
+            example:
+              quantity: 4
+      responses:
+        '200':
+          description: Cart item updated — returns the updated cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Cart'
+              example:
+                id: 2
+                user_id: 3
+                updated_at: "2025-01-16T08:50:00Z"
+                items:
+                  - product_id: 1
+                    product_name: Blueberries
+                    quantity: 4
+                    unit_price: 4.29
+                    subtotal: 17.16
+                total: 17.16
+        '400':
+          description: product_id is not a positive integer, or quantity is negative
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: quantity must be a non-negative integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '404':
+          description: Product is not in the cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product is not in the cart
+
+  # ─── Orders ────────────────────────────────────────────────────────────────
+
+  /orders:
+    get:
+      tags: [Orders]
+      summary: List all orders
+      description: Returns all orders across all users. Admin access required.
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Array of order summaries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/OrderSummary'
+              example:
+                - id: 1
+                  user_id: 3
+                  status: pending
+                  total: 12.78
+                  created_at: "2025-01-15T10:30:00Z"
+                - id: 2
+                  user_id: 5
+                  status: shipped
+                  total: 22.50
+                  created_at: "2025-01-16T09:00:00Z"
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+
+    post:
+      tags: [Orders]
+      summary: Place an order
+      description: >
+        Creates a new order from the contents of the authenticated user's cart.
+        The server snapshots current product prices into order items, calculates
+        the total, and clears the cart. The cart must not be empty.
+      security:
+        - bearerAuth: []
+      responses:
+        '201':
+          description: Order placed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+              example:
+                id: 7
+                user_id: 3
+                status: pending
+                total: 8.58
+                created_at: "2025-01-16T09:00:00Z"
+                items:
+                  - product_id: 1
+                    product_name: Blueberries
+                    quantity: 2
+                    unit_price: 4.29
+        '400':
+          description: Cart is empty
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Cart is empty
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '404':
+          description: One or more products in the cart no longer exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Product 5 no longer exists
+
+  /orders/{id}:
+    get:
+      tags: [Orders]
+      summary: Get an order by ID
+      description: >
+        Returns a single order with its line items. A user may only retrieve
+        their own order; admins may retrieve any order.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        '200':
+          description: Order found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderDetail'
+              example:
+                id: 1
+                user_id: 3
+                status: pending
+                total: 12.78
+                created_at: "2025-01-15T10:30:00Z"
+                items:
+                  - product_id: 1
+                    product_name: Blueberries
+                    quantity: 2
+                    unit_price: 4.29
+        '400':
+          description: ID is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: ID must be a positive integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Order belongs to a different user
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: you do not have access to this order"
+        '404':
+          description: No order with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Order 99 not found
+
+    patch:
+      tags: [Orders]
+      summary: Update an order's status
+      description: >
+        Advances the order status (`pending` → `processing` → `shipped` →
+        `delivered`). Admin access required.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [pending, processing, shipped, delivered]
+                  example: shipped
+            example:
+              status: shipped
+      responses:
+        '200':
+          description: Order status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OrderSummary'
+              example:
+                id: 1
+                user_id: 3
+                status: shipped
+                total: 12.78
+                created_at: "2025-01-15T10:30:00Z"
+        '400':
+          description: ID is not a positive integer, or status value is not valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Status must be one of: pending, processing, shipped, delivered"
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+        '404':
+          description: No order with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Order 99 not found
+
+    delete:
+      tags: [Orders]
+      summary: Delete an order
+      description: >
+        Deletes an order and all associated order items via cascade.
+        Admin access required.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+          example: 1
+      responses:
+        '204':
+          description: Order deleted — no content returned
+        '400':
+          description: ID is not a positive integer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: ID must be a positive integer
+        '401':
+          description: No valid token provided
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Not authenticated. Please provide a valid token.
+        '403':
+          description: Authenticated user is not an admin
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: "Forbidden: insufficient permission"
+        '404':
+          description: No order with that ID exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example:
+                error: Order 99 not found
