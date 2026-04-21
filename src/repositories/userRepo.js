@@ -2,12 +2,12 @@ import prisma from '../config/db.js';
 
 export async function createUserWithCart(name, email, passwordHash) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      const newUser = await tx.user.create({
+    return await prisma.$transaction(async (transaction) => {
+      const newUser = await transaction.user.create({
         data: { name, email, password_hash: passwordHash, created_at: new Date() },
         select: { id: true, name: true, email: true, created_at: true },
       });
-      await tx.cart.create({
+      await transaction.cart.create({
         data: {
           user_id: newUser.id,
           created_at: new Date(),

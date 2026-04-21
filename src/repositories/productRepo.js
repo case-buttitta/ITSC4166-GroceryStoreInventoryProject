@@ -57,10 +57,10 @@ export async function update(id, updatedData) {
 
 export async function remove(id) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      await tx.cartItem.deleteMany({ where: { product_id: id } });
-      await tx.orderItem.deleteMany({ where: { product_id: id } });
-      return tx.product.delete({ where: { id } });
+    return await prisma.$transaction(async (transaction) => {
+      await transaction.cartItem.deleteMany({ where: { product_id: id } });
+      await transaction.orderItem.deleteMany({ where: { product_id: id } });
+      return transaction.product.delete({ where: { id } });
     });
   } catch (error) {
     if (error.code === 'P2025') return null;

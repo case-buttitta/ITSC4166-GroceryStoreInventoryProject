@@ -3,21 +3,13 @@ import 'dotenv/config';
 import prisma from '../src/config/db.js';
 
 try {
-  // Clear all tables and reset auto-increment IDs
   await prisma.$executeRaw`TRUNCATE "OrderItem", "Order", "CartItem", "Cart", "Product", "User" RESTART IDENTITY CASCADE`;
-
-  // ─── Users ───────────────────────────────────────────────────────────────
-  // At least one admin and one regular user, all with known credentials.
-
-  const adminHash    = await bcrypt.hash('admin123', 10);
-  const jane_hash    = await bcrypt.hash('password123', 10);
-  const john_hash    = await bcrypt.hash('password123', 10);
 
   const admin = await prisma.user.create({
     data: {
       name: 'Store Admin',
       email: 'admin@grocery.com',
-      password_hash: adminHash,
+      password_hash: await bcrypt.hash('admin123', 10),
       role: 'admin',
       created_at: new Date(),
     },
@@ -27,7 +19,7 @@ try {
     data: {
       name: 'Jane Doe',
       email: 'jane@grocery.com',
-      password_hash: jane_hash,
+      password_hash: await bcrypt.hash('password123', 10),
       created_at: new Date(),
     },
   });
@@ -36,14 +28,13 @@ try {
     data: {
       name: 'John Smith',
       email: 'john@grocery.com',
-      password_hash: john_hash,
+      password_hash: await bcrypt.hash('password123', 10),
       created_at: new Date(),
     },
   });
 
-  console.log('✓ Users seeded');
+  console.log('Users seeded');
 
-  // ─── Products ────────────────────────────────────────────────────────────
 
   const [blueberries, strawberries, milk, bread, eggs] =
     await Promise.all([
@@ -99,10 +90,8 @@ try {
       }),
     ]);
 
-  console.log('✓ Products seeded');
+  console.log('Products seeded');
 
-  // ─── Carts ───────────────────────────────────────────────────────────────
-  // One cart per user. Jane's cart has items; the others are empty.
 
   const janeCart = await prisma.cart.create({
     data: {
@@ -119,7 +108,6 @@ try {
     ],
   });
 
-  // Jane has two products in her cart (useful for testing GET /cart and checkout)
   await prisma.cartItem.createMany({
     data: [
       { cart_id: janeCart.id, product_id: blueberries.id,  quantity: 2 },
@@ -127,13 +115,8 @@ try {
     ],
   });
 
-  console.log('✓ Carts seeded');
+  console.log('Carts seeded');
 
-  // ─── Orders ──────────────────────────────────────────────────────────────
-  // Jane has two past orders; John has one.
-  // Useful for testing ownership (403 when wrong user) and admin list/detail.
-
-  // Jane – order 1: Blueberries x3, Milk x1  →  total = 3×4.29 + 1×5.99 = 18.86
   const janeOrder1 = await prisma.order.create({
     data: {
       user_id: jane.id,
@@ -148,8 +131,6 @@ try {
       { order_id: janeOrder1.id, product_id: milk.id,        quantity: 1, unit_price: 5.99 },
     ],
   });
-
-  // Jane – order 2: Strawberries x2, Bread x1  →  total = 2×3.49 + 1×2.99 = 9.97
   const janeOrder2 = await prisma.order.create({
     data: {
       user_id: jane.id,
@@ -165,7 +146,6 @@ try {
     ],
   });
 
-  // John – order 1: Eggs x2  →  total = 2×6.49 = 12.98
   const johnOrder1 = await prisma.order.create({
     data: {
       user_id: john.id,
@@ -180,20 +160,7 @@ try {
     ],
   });
 
-  console.log('✓ Orders seeded');
-
-  console.log(`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Seed complete — test credentials
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Admin  │ admin@grocery.com  │ admin123
- User 1 │ jane@grocery.com   │ password123
- User 2 │ john@grocery.com   │ password123
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
- Jane's cart : Blueberries x2, Strawberries x1
- Jane's orders: #${janeOrder1.id} (delivered), #${janeOrder2.id} (shipped)
- John's orders: #${johnOrder1.id} (pending)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
+  console.log('Orders seeded');
 
 } catch (error) {
   console.error('Seed failed:', error);

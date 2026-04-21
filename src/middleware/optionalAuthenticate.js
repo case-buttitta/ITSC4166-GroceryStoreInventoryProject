@@ -9,7 +9,6 @@ export function optionalAuthenticate(req, res, next) {
       const payload = jwt.verify(token, JWT_SECRET);
       req.user = { id: payload.id, role: payload.role };
     } catch {
-      // Invalid token — treat as unauthenticated
     }
   }
   next();

@@ -33,8 +33,8 @@ export async function getOrderById(id) {
 }
 
 export async function createOrderFromCart(userId, cartItems, total) {
-  const orderId = await prisma.$transaction(async (tx) => {
-    const order = await tx.order.create({
+  const orderId = await prisma.$transaction(async (transaction) => { //all in one with multiple prisma commands
+    const order = await transaction.order.create({
       data: {
         user_id: userId,
         status: 'pending',
@@ -43,7 +43,7 @@ export async function createOrderFromCart(userId, cartItems, total) {
       },
     });
 
-    await tx.orderItem.createMany({
+    await transaction.orderItem.createMany({
       data: cartItems.map((item) => ({
         order_id: order.id,
         product_id: item.product_id,
@@ -52,9 +52,9 @@ export async function createOrderFromCart(userId, cartItems, total) {
       })),
     });
 
-    const cart = await tx.cart.findFirst({ where: { user_id: userId } });
-    await tx.cartItem.deleteMany({ where: { cart_id: cart.id } });
-    await tx.cart.update({
+    const cart = await transaction.cart.findFirst({ where: { user_id: userId } });
+    await transaction.cartItem.deleteMany({ where: { cart_id: cart.id } });
+    await transaction.cart.update({
       where: { id: cart.id },
       data: { updated_at: new Date() },
     });
@@ -80,9 +80,9 @@ export async function updateOrderStatus(id, status) {
 
 export async function removeOrder(id) {
   try {
-    return await prisma.$transaction(async (tx) => {
-      await tx.orderItem.deleteMany({ where: { order_id: id } });
-      return tx.order.delete({ where: { id } });
+    return await prisma.$transaction(async (transaction) => {
+      await transaction.orderItem.deleteMany({ where: { order_id: id } });
+      return transaction.order.delete({ where: { id } });
     });
   } catch (error) {
     if (error.code === 'P2025') return null;
