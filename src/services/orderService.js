@@ -8,7 +8,7 @@ import {
 import { getCartByUserId } from '../repositories/cartRepo.js';
 import { getById as getProductById } from '../repositories/productRepo.js';
 
-const STATUSES = ['pending', 'processing', 'shipped', 'delivered'];
+const statuses = ['pending', 'processing', 'shipped', 'delivered'];
 
 export async function getAllOrdersService() {
   return getAllOrders();
@@ -58,8 +58,8 @@ export async function createOrderService(userId) {
 }
 
 export async function updateOrderStatusService(id, status) {
-  if (!status || !STATUSES.includes(status)) {
-    const error = new Error(`Status must be one of: ${STATUSES.join(', ')}`);
+  if (!status || !statuses.includes(status)) {
+    const error = new Error(`Status must be one of: ${statuses.join(', ')}`);
     error.status = 400;
     throw error;
   }

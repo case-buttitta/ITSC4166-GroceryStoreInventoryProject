@@ -48,7 +48,7 @@ export const validateCreateProduct = [
   handleValidationErrors,
 ];
 
-const UPDATABLE_FIELDS = ['product_name', 'upc', 'price', 'stock_quantity', 'reorder_threshold', 'warehouse_location'];
+const updatable_fields = ['product_name', 'upc', 'price', 'stock_quantity', 'reorder_threshold', 'warehouse_location'];
 
 export const validateUpdateProduct = [
   param('id')
@@ -74,7 +74,7 @@ export const validateUpdateProduct = [
     .toInt(),
   body('warehouse_location').optional().isString().trim(),
   body().custom((_, { req }) => {
-    if (!UPDATABLE_FIELDS.some((f) => req.body[f] !== undefined)) {
+    if (!updatable_fields.some((f) => req.body[f] !== undefined)) {
       throw new Error('No valid fields provided for update');
     }
     return true;

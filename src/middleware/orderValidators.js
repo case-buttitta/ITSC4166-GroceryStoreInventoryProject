@@ -1,7 +1,7 @@
 import { body, param } from 'express-validator';
 import { handleValidationErrors } from './handleValidationErrors.js';
 
-const STATUSES = ['pending', 'processing', 'shipped', 'delivered'];
+const statuses = ['pending', 'processing', 'shipped', 'delivered'];
 
 export const validateOrderId = [
   param('id')
@@ -20,7 +20,7 @@ export const validateUpdateOrderStatus = [
     .exists({ values: 'falsy' })
     .withMessage('status is required')
     .bail()
-    .isIn(STATUSES)
-    .withMessage(`Status must be one of: ${STATUSES.join(', ')}`),
+    .isIn(statuses)
+    .withMessage(`Status must be one of: ${statuses.join(', ')}`),
   handleValidationErrors,
 ];
