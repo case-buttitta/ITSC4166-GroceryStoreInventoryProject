@@ -252,13 +252,19 @@ paths:
                 email:
                   type: string
                   format: email
-                  example: jane@example.com
                 password:
                   type: string
-                  example: secretpass1
-            example:
-              email: jane@example.com
-              password: secretpass1
+            examples:
+              regularUser:
+                summary: Regular user
+                value:
+                  email: jane@grocery.com
+                  password: password123
+              admin:
+                summary: Admin user
+                value:
+                  email: admin@grocery.com
+                  password: admin123
       responses:
         '200':
           description: Authentication successful — returns a JWT
